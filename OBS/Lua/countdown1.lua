@@ -2,7 +2,6 @@ obs           = obslua
 source_name   = ""
 total_seconds = 0
 
-
 cur_seconds   = 0
 last_text     = ""
 stop_text     = ""
@@ -11,92 +10,18 @@ activated     = false
 hotkey_id     = obs.OBS_INVALID_HOTKEY_ID
 
 -- Function to set the time text
-function set_time_text_sec()
-	local seconds       = math.floor(cur_seconds % 60)
-	local total_minutes = math.floor(cur_seconds / 60)
-	local minutes       = math.floor(total_minutes % 60)
-	local hours         = math.floor(total_minutes / 60)
-	local text          = string.format("%02d", seconds)
-	
-	-- local text          = string.format("%20d:%02d:%02d", hours, minutes, seconds) 
-	-- local text          = string.format("%02d:%02d", minutes, seconds) 
-	-- local text          = string.format("%02d", seconds)
-	-- local text          = string.format("%02d' %02d\"", minutes, seconds)
-	
-	if cur_seconds < 60 then -- TORMY
-		text = '00:' .. text
-	end
-	text = start_text .. text -- TORMY
-	if cur_seconds < 1 then
-		text = stop_text
-	end
-
-	if text ~= last_text then
-	
-		local source = obs.obs_get_source_by_name(source_name)
-		if source ~= nil then
-			local settings = obs.obs_data_create()
-			obs.obs_data_set_string(settings, "text", text)
-			obs.obs_source_update(source, settings)
-			obs.obs_data_release(settings)
-			obs.obs_source_release(source)
-		end
-	end
-
-	last_text = text
-end
-
 function set_time_text()
 	local seconds       = math.floor(cur_seconds % 60)
 	local total_minutes = math.floor(cur_seconds / 60)
 	local minutes       = math.floor(total_minutes % 60)
 	local hours         = math.floor(total_minutes / 60)
-	local text          = string.format("%02d:%02d", minutes, seconds)
-	
-	-- local text          = string.format("%20d:%02d:%02d", hours, minutes, seconds) 
-	-- local text          = string.format("%02d:%02d", minutes, seconds) 
-	-- local text          = string.format("%02d", seconds)
-	-- local text          = string.format("%02d' %02d\"", minutes, seconds)
-	
-	text = start_text .. text
-	if cur_seconds < 1 then
-		text = stop_text
-	end
-
-	if text ~= last_text then
-	
-		local source = obs.obs_get_source_by_name(source_name)
-		if source ~= nil then
-			local settings = obs.obs_data_create()
-			obs.obs_data_set_string(settings, "text", text)
-			obs.obs_source_update(source, settings)
-			obs.obs_data_release(settings)
-			obs.obs_source_release(source)
-		end
-	end
-
-	last_text = text
-end
-
-function set_time_text_hour()
-	local seconds       = math.floor(cur_seconds % 60)
-	local total_minutes = math.floor(cur_seconds / 60)
-	local minutes       = math.floor(total_minutes % 60)
-	local hours         = math.floor(total_minutes / 60)
 	local text          = string.format("%02d:%02d:%02d", hours, minutes, seconds)
-	
-	-- local text          = string.format("%20d:%02d:%02d", hours, minutes, seconds) 
-	-- local text          = string.format("%02d:%02d", minutes, seconds) 
-	-- local text          = string.format("%02d", seconds)
-	-- local text          = string.format("%02d' %02d\"", minutes, seconds)
-	
-	text = start_text .. text
+
 	if cur_seconds < 1 then
 		text = stop_text
 	end
 
 	if text ~= last_text then
-	
 		local source = obs.obs_get_source_by_name(source_name)
 		if source ~= nil then
 			local settings = obs.obs_data_create()
@@ -116,16 +41,8 @@ function timer_callback()
 		obs.remove_current_callback()
 		cur_seconds = 0
 	end
-	if cur_seconds >= 60 then
-        if cur_seconds >= 3600 then
-            set_time_text_hour()
-        else
-            set_time_text()
-        end
-    else
-       set_time_text_sec()
-    end
-	
+
+	set_time_text()
 end
 
 function activate(activating)
@@ -137,15 +54,7 @@ function activate(activating)
 
 	if activating then
 		cur_seconds = total_seconds
-		if cur_seconds >= 60 then
-			if cur_seconds >= 3600 then
-			set_time_text_hour()
-			else
-            set_time_text()
-        end
-    else
-       set_time_text_sec()
-    end
+		set_time_text()
 		obs.timer_add(timer_callback, 1000)
 	else
 		obs.timer_remove(timer_callback)
@@ -196,14 +105,13 @@ end
 -- can change for the entire script module itself
 function script_properties()
 	local props = obs.obs_properties_create()
-	obs.obs_properties_add_int(props, "duration", "Duration (seconds)", 1, 100000, 1)
-	
+	obs.obs_properties_add_int(props, "duration", "Duration (minutes)", 1, 100000, 1)
 
 	local p = obs.obs_properties_add_list(props, "source", "Text Source", obs.OBS_COMBO_TYPE_EDITABLE, obs.OBS_COMBO_FORMAT_STRING)
 	local sources = obs.obs_enum_sources()
 	if sources ~= nil then
 		for _, source in ipairs(sources) do
-			source_id = obs.obs_source_get_id(source)
+			source_id = obs.obs_source_get_unversioned_id(source)
 			if source_id == "text_gdiplus" or source_id == "text_ft2_source" then
 				local name = obs.obs_source_get_name(source)
 				obs.obs_property_list_add_string(p, name, name)
@@ -212,7 +120,6 @@ function script_properties()
 	end
 	obs.source_list_release(sources)
 
-	obs.obs_properties_add_text(props, "start_text", "Start Text", obs.OBS_TEXT_DEFAULT) -- TORMY
 	obs.obs_properties_add_text(props, "stop_text", "Final Text", obs.OBS_TEXT_DEFAULT)
 	obs.obs_properties_add_button(props, "reset_button", "Reset Timer", reset_button_clicked)
 
@@ -229,9 +136,8 @@ end
 function script_update(settings)
 	activate(false)
 
-	total_seconds = obs.obs_data_get_int(settings, "duration") 
+	total_seconds = obs.obs_data_get_int(settings, "duration") * 60
 	source_name = obs.obs_data_get_string(settings, "source")
-	start_text = obs.obs_data_get_string(settings, "start_text") -- TORMY
 	stop_text = obs.obs_data_get_string(settings, "stop_text")
 
 	reset(true)
@@ -240,8 +146,7 @@ end
 -- A function named script_defaults will be called to set the default settings
 function script_defaults(settings)
 	obs.obs_data_set_default_int(settings, "duration", 5)
-	obs.obs_data_set_default_string(settings, "start_text", "Live in: ") -- TORMY
-	obs.obs_data_set_default_string(settings, "stop_text", "LIVE NOW!")
+	obs.obs_data_set_default_string(settings, "stop_text", "Starting soon (tm)")
 end
 
 -- A function named script_save will be called when the script is saved
